@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flight Notifications</title>
+    <style>
+      /* Add some basic styles to make the pre tag look nice */
+      #pushDetails {
+        background-color: #f4f4f4;
+        padding: 10px;
+        border: 1px solid #ccc;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      button.copy-btn {
+        margin-top: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      th,
+      td {
+        border: 1px solid #ccc;
+        padding: 10px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+      }
+    </style>
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+  <body>
+    <button onclick="subscribe()">Subscribe</button>
+
+    <div>
+      <h3>Safely Exposed Details:</h3>
+      <pre id="pushDetails">No subscription yet</pre>
+      <button class="copy-btn" onclick="copyToClipboard()">Copy</button>
+    </div>
+
+    <h1>Flight Information</h1>
+    <table id="flightTable">
+      <thead>
+        <tr>
+          <th>Flight Number</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th>Aircraft</th>
+          <th>STD</th>
+          <th>Customer ETD</th>
+          <th>Operational ETD</th>
+        </tr>
+      </thead>
+      <tbody id="flightData">
+        <!-- Data will be populated here -->
+      </tbody>
+    </table>
+
+    <script>
+      // Register the service worker
+      addEventListener("load", async () => {
+        let sw = await navigator.serviceWorker.register("./sw.js");
+        console.log("Service Worker registered:", sw);
+        fetchFlightData(); // Fetch flight data after service worker registration
+      });
+
+      // Subscribe to push notifications
+      async function subscribe() {
+        let sw = await navigator.serviceWorker.ready; // Get the service worker
+        let push = await sw.pushManager.subscribe({
+          userVisibleOnly: true, // needed for Chrome
+          applicationServerKey: "your-public-key-here",
+        });
+        console.log("Push Subscription:", JSON.stringify(push));
+
+        // Write the subscription details to the pre tag
+        let pushDetails = document.getElementById("pushDetails");
+        pushDetails.textContent = JSON.stringify(push, null, 2); // Format as JSON with indentation
+      }
+
+      // Copy the contents of the pre tag to clipboard
+      function copyToClipboard() {
+        let pushDetails = document.getElementById("pushDetails").textContent;
+        navigator.clipboard
+          .writeText(pushDetails)
+          .then(() => {
+            alert("Copied to clipboard!");
+          })
+          .catch((err) => {
+            console.error("Failed to copy: ", err);
+          });
+      }
+
+      // Fetch flight data from OpenSky API and display it in the table
+      const fetchFlightData = async () => {
+        const apiUrl = "https://opensky-network.org/api/states/all?lamin=49.7&lamax=50.5&lomin=3.2&lomax=4.6"; // OpenSky API endpoint
+
+        try {
+          const response = await fetch(apiUrl);
+
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+
+          const data = await response.json();
+          populateFlightTable(data.states); // Populate the table with flight data
+        } catch (error) {
+          console.error("Error fetching data from OpenSky:", error);
+        }
+      };
+
+      const populateFlightTable = (flights) => {
+        const flightTableBody = document.getElementById("flightData");
+        flightTableBody.innerHTML = ""; // Clear the table before populating
+
+        flights.forEach((flight) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+          <td>${flight[1] || "N/A"}</td> <!-- Flight Number -->
+          <td>${flight[2] || "N/A"}</td> <!-- Origin -->
+          <td>${flight[5] || "N/A"}</td> <!-- Destination -->
+          <td>${flight[8] || "N/A"}</td> <!-- Aircraft -->
+          <td>${new Date(flight[3] * 1000).toLocaleString() || "N/A"}</td> <!-- STD -->
+          <td>${new Date(flight[4] * 1000).toLocaleString() || "N/A"}</td> <!-- Customer ETD -->
+          <td>${new Date(flight[7] * 1000).toLocaleString() || "N/A"}</td> <!-- Operational ETD -->
+        `;
+          flightTableBody.appendChild(row);
+        });
+      };
+    </script>
+  </body>
+</html>
